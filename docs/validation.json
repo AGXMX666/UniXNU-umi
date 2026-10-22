@@ -1,0 +1,45 @@
+{
+  "schema": 1,
+  "date": "2026-10-23",
+  "device": "Xiaomi Mi 10 (umi)",
+  "soc": "SM8250",
+  "tested_variant": "12 GiB RAM / 256 GB storage",
+  "donor": {
+    "product": "iPad7,1",
+    "version": "17.7.11",
+    "build": "21H461"
+  },
+  "latest_attempt": 65,
+  "observations": {
+    "setup_ui": "Hello / Setup Assistant confirmed by the device owner",
+    "touch_working": false,
+    "touch_seconds": 141,
+    "touch_polls": 61963,
+    "point_events": 0,
+    "hid_reports": 0,
+    "transport_errors": 0,
+    "smp_attempt": 50,
+    "logical_cpus_online": 8,
+    "per_core_timer_at_120": [
+      181699,
+      196474,
+      101821,
+      24200,
+      23828,
+      14234,
+      11322,
+      12861
+    ],
+    "gpu_acceleration": false
+  },
+  "limitations": [
+    "No successful physical touch reports; setup completion and home screen not verified.",
+    "The original boot console and device dumps remain private; this is a maintainer-reported summary.",
+    "Some retained RAM log records are incomplete; missing fields are not filled with zero.",
+    "Published sources remain a development snapshot; full image generation still requires local inputs and ABI/provenance records."
+  ],
+  "image_hashes": {
+    "kernel_sha256": "74cf940a463956d9b63adeb44a94778fab832cdbbbd9df329474a66bf1670864",
+    "runtime_log_sha256": "ad08ef704926aa12cc6a93893ca8f90e5b41638b2a3f00f4602712dc83348f01"
+  }
+}
