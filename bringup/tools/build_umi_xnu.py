@@ -342,7 +342,7 @@ def main():
         ]
         if all(p.is_file() for p in lock_inputs):
             report["lock_failure_trace"] = {
-                str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
+                str(p.relative_to(ctx.device.parent)): hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in lock_inputs
             }
     exec_inputs = [ROOT / "devices/umi/scripts/umi-exec-trace.h",
