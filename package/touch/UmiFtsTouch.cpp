@@ -12,6 +12,7 @@
 #include "UmiFtsCore.h"
 #include "UmiFtsStartup.h"
 #include "UmiFtsIdentity.h"
+#include "UmiBoardBoost.h"
 #include "UmiFtsRetry.h"
 #include "UmiFtsSensing.h"
 #include "UmiFtsSysInfo.h"
@@ -55,6 +56,7 @@ static void touchDebug(unsigned,const char *format,...) {
     va_list a;va_start(a,format);debugLog.append(format,a);va_end(a);touchFlush();
 }
 struct Region {uintptr_t physical;unsigned length;IOMemoryMap *mapping;};
+static Region boardSpmiWrite={0,0x1000,nullptr};
 static Region regions[]={
  {0x00a94000,0x1000,nullptr},{0x0f500000,0x46000,nullptr},
  {0x0c440000,0x2000,nullptr},{0x0c40a000,0x1000,nullptr},
@@ -64,6 +66,9 @@ static Region regions[]={
  {0x00118000,0x1000,nullptr},{0x00123000,0x1000,nullptr},{0x00152000,0x1000,nullptr},
  {0x0f942000,0x1000,nullptr}}; // Kona GPIO66 is NORTH: primary panel TE input.
 static uintptr_t virtualAddress(uintptr_t physical,unsigned bytes) {
+    if(boardSpmiWrite.mapping && physical>=boardSpmiWrite.physical &&
+       bytes<=boardSpmiWrite.length && physical-boardSpmiWrite.physical<=boardSpmiWrite.length-bytes)
+        return boardSpmiWrite.mapping->getVirtualAddress()+physical-boardSpmiWrite.physical;
     for(auto &r:regions)if(r.mapping && physical>=r.physical && physical-r.physical<=r.length-bytes)
         return r.mapping->getVirtualAddress()+physical-r.physical;
     panic("umi FTS unqualified MMIO %lx",(unsigned long)physical);
@@ -77,9 +82,21 @@ static void MmioWrite32(uintptr_t address,uint32_t value) {
     uintptr_t mapped=virtualAddress(address,4);
     __asm__ volatile("dsb sy\n\tstr %w0,[%1]\n\tdsb sy"::"r"(value),"r"(mapped):"memory");
 }
+static bool prepareBoardSpmiWrite(unsigned sid,unsigned address,unsigned value,uintptr_t channel) {
+    if(sid!=2 || address!=0xc444 || value!=0x80 || channel<0x0c600000 ||
+       channel>=0x0e600000 || (channel&0xffff))return false;
+    if(boardSpmiWrite.mapping)return channel==boardSpmiWrite.physical;
+    IODeviceMemory *mem=IODeviceMemory::withRange(channel,boardSpmiWrite.length);
+    if(!mem)return false;
+    boardSpmiWrite.mapping=mem->map(kIOMapAnywhere|kIOMapInhibitCache);mem->release();
+    if(!boardSpmiWrite.mapping)return false;
+    boardSpmiWrite.physical=channel;return true;
+}
+#define UMI_SPMI_PREPARE_WRITE(sid,address,value,channel) prepareBoardSpmiWrite(sid,address,value,channel)
 namespace spmi {
 #include "UmiSpmi.inc"
 }
+#undef UMI_SPMI_PREPARE_WRITE
 using spmi::UmiSpmiRead8;
 namespace rpmh {
 #include "UmiRpmh.inc"
@@ -429,7 +446,7 @@ static void recordIdentity(const UmiFtsIdentity &r,uint64_t elapsedNs) {
 static void recordBoardRail(unsigned phase) {
     if(rawQuota>=UMI_FTS_PROTOCOL_LIMIT || logPublished>=UMI_FTS_LOG_LIMIT)return;
     // xiaomi-sm8250-common.dtsi: always-on vdd_boost_vreg, PM8150B GPIO5.
-    // Its connection to FTS AVDD is unknown. Observe only; no boost/pin writes.
+    // Its connection to FTS AVDD is unknown. This capture itself is read-only.
     // Registers follow pinctrl-spmi-gpio.c, including LV/MV output-source.
     const uint16_t addresses[]={0x0104,0x0105,0xc404,0xc405,0xc410,0xc440,
                                0xc441,0xc442,0xc443,0xc444,0xc445,0xc446};
@@ -443,6 +460,23 @@ static void recordBoardRail(unsigned phase) {
     v[12]=phase;v[13]=MmioRead32(GPIO_CTL(69));v[14]=MmioRead32(GPIO_IO(69));v[15]=0;
     __atomic_store_n(&logPublished,i+1,__ATOMIC_RELEASE);
 }
+static bool enableBoardBoost(void) {
+    uint64_t start=GetPerformanceCounter();
+    UmiBoardBoost r=umi_board_boost_enable(
+        [](uint8_t sid,uint16_t addr,uint8_t *v){return UmiSpmiRead8(sid,addr,v);},
+        [](){return spmi::UmiSpmiBoardBoostHigh();},
+        [](unsigned us){MicroSecondDelay(us);});
+    if(rawQuota<UMI_FTS_PROTOCOL_LIMIT && logPublished<UMI_FTS_LOG_LIMIT){
+        unsigned i=logPublished;++rawQuota;uint64_t *v=logs[i];
+        v[0]=27;v[1]=i+1;v[2]=seconds();v[3]=r.result;v[4]=r.readResult;v[5]=r.writeResult;
+        v[6]=r.writes;v[7]=r.before;v[8]=r.after;v[9]=r.flags;
+        v[10]=GetTimeInNanoSecond(GetPerformanceCounter()-start)/1000;
+        v[11]=spmi::mBoardWriteApid;v[12]=spmi::mBoardWriteOwner;v[13]=spmi::mBoardWriteChannel;
+        v[14]=r.delayUs;v[15]=0;
+        __atomic_store_n(&logPublished,i+1,__ATOMIC_RELEASE);
+    }
+    return r.result==0;
+}
 static void worker(void *,wait_result_t) {
     thread_set_thread_name(current_thread(),"umi_fts");stage=2;
     if(!isUmi()){failure=1;stage=90;return;}
@@ -453,6 +487,9 @@ static void worker(void *,wait_result_t) {
     bus::mCycleEnabled=false;bus::mFullCycleEnabled=false;
     recordNativeBoard(0,0); // Before touch pin/power ownership.
     recordBoardRail(0);
+    // Native board regulator is always-on, enabled before FTS supply/reset.
+    // Retain on touch failure too; never change its inherited VIN or drive mode.
+    if(!enableBoardBoost()){stop(24);return;}
     unsigned native=0;
     bus::mNative=PE_parse_boot_argn("umi-fts-gpi",&native,sizeof(native)) && native==1;
     stage=3;
@@ -593,7 +630,8 @@ static void worker(void *,wait_result_t) {
             if(!frameSample.active && seconds()>=sampleTimes[sampleNumber]){
                 sampleStarted=GetPerformanceCounter();
                 if(!pointCount && !native_touch_hid_reports){
-                    if(sampleNumber==1 && !recordModes(4)){stop(21);return;}
+                    // Mode parity was captured before/after the startup command.
+                    // Keep this slot for the board-boost enable/readback record.
                     recordScan(sampleNumber+1);
                     if(!bus::ControlReady()){stop(18);return;}
                 }

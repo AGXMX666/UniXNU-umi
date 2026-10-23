@@ -4,10 +4,13 @@
   71b13e62f057a649b77fe4062feb73ee72ad609c, drivers/spmi/spmi-pmic-arb.c.
   Same mapping and read format verified by UmiButtonsDxe on this handset.
   Ownership/configuration are never changed. PMIC writes are restricted to
-  primary PON reset registers (caller identity guards). Touch power uses
-  RPMh requests; its LDO remains read-only through this library.
+  primary PON reset registers, plus a dedicated guarded umi board-boost enable.
+  Touch LDO power uses RPMh; its registers remain read-only through this library.
   SPDX-License-Identifier: BSD-2-Clause-Patent
 **/
+STATIC UINTN mBoardWriteApid = 512;
+STATIC UINT32 mBoardWriteOwner = 7;
+STATIC UINTN mBoardWriteChannel;
 STATIC EFI_STATUS
 Transfer (UINT8 Sid, UINT16 Address, UINT8 *Value, BOOLEAN Write)
 {
@@ -43,10 +46,20 @@ Transfer (UINT8 Sid, UINT16 Address, UINT8 *Value, BOOLEAN Write)
   if (Apid == 512) {
     return EFI_NOT_FOUND;
   }
+  if (Write) {
+    mBoardWriteApid = Apid;
+    mBoardWriteOwner = SelectedOwner;
+  }
   if (Write && (SelectedOwner != 0)) {
     return EFI_ACCESS_DENIED;
   }
   Channel = Write ? 0x0C600000 + Apid * 0x10000 : 0x0E600000 + Apid * 0x80;
+#ifdef UMI_SPMI_PREPARE_WRITE
+  if (Write && !UMI_SPMI_PREPARE_WRITE(Sid, Address, *Value, Channel)) {
+    return EFI_ACCESS_DENIED;
+  }
+#endif
+  if (Write) mBoardWriteChannel = Channel;
   Interrupts = SaveAndDisableInterrupts ();
   if (Write) {
     MmioWrite32 (Channel + 0x10, *Value);
@@ -86,4 +99,13 @@ UmiSpmiWrite8 (UINT8 Sid, UINT16 Address, UINT8 Value)
     return EFI_ACCESS_DENIED;
   }
   return Transfer (Sid, Address, &Value, TRUE);
+}
+
+// Caller verifies PM8150B identity and exact enabled GPIO-output profile first.
+// Fixed operation prevents other PMIC, GPIO, voltage or NVM writes.
+STATIC EFI_STATUS
+UmiSpmiBoardBoostHigh (VOID)
+{
+  UINT8 Value = 0x80;
+  return Transfer (2, 0xC444, &Value, TRUE);
 }

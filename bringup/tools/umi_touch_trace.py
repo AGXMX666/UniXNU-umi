@@ -31,6 +31,7 @@ EXTRA_SCHEMAS[23]=('native_board',('version','record','seconds','phase','ready_c
 EXTRA_SCHEMAS[24]=('native_modes',('version','record','seconds','phase','mode_result','grip_result','valid_mask','mode_word','grip_word','charge_attempted','charge_result','charge_value','elapsed_us','point_events','hid_reports','irq_level'))
 EXTRA_SCHEMAS[25]=('factory_identity',('version','record','seconds','result','flags','before_word','after_word','identity_word','event_word','write_result','read_result','polls','elapsed_us','record_type','reset_count','nvm_writes'))
 EXTRA_SCHEMAS[26]=('board_rail',('version','record','seconds','result','valid_mask','sid','pin','base','word0','word1','read_count','elapsed_us','phase','avdd_ctl','avdd_io','writes'))
+EXTRA_SCHEMAS[27]=('board_boost_enable',('version','record','seconds','result','read_result','write_result','write_attempts','before','after','flags','elapsed_us','apid','owner','channel','delay_us','nvm_writes'))
 def assemble_sysinfo(pages):
     data=bytearray(208);known=set()
     for p in pages:
@@ -59,6 +60,7 @@ def decode_touch(data):
     out['native_modes']=[]
     out['factory_identity']=[]
     out['board_rail']=[]
+    out['board_boost_enable']=[]
     for (tag,event),fields in sorted(groups.items()):
         if any(len(v)!=1 for v in fields.values()):out['conflicts'].append([tag,event]);continue
         v={i:next(iter(x)) for i,x in fields.items()};names=FIELDS if tag=='TOUC' else RAW_FIELDS
@@ -74,6 +76,15 @@ def decode_touch(data):
         r=dict(record=event,complete=len(v)==len(names),missing_fields=sorted(set(range(len(names)))-set(v)))
         r.update({name:v.get(i) for i,name in enumerate(names)})
         if extra:
+            if v[0]==27:
+                valid=False
+                if r['complete']:
+                    written=(r['write_attempts']==1 and r['before']==0 and r['flags']==7 and r['apid']<512 and r['owner']==0 and r['channel']==0x0c600000+r['apid']*0x10000)
+                    inherited=(r['write_attempts']==0 and r['before']==0x80 and r['flags']==15 and r['apid']==512 and r['owner']==7 and r['channel']==0)
+                    valid=(r['result']==r['read_result']==r['write_result']==0 and r['after']==0x80 and r['delay_us']==4000 and r['nvm_writes']==0 and (written or inherited))
+                r['enable_readback_verified']=valid if r['complete'] else None
+                r['analog_voltage_measured']=False
+                r['touch_fix_verified']=False
             if v[0]==26:
                 known=(r['complete'] and r['result']==0 and r['valid_mask']==4095 and r['sid']==2 and r['pin']==5 and r['base']==0xc400 and r['read_count']==12 and r['writes']==0 and r['word1']>>32==0)
                 data=struct.pack('<QQ',r['word0'],r['word1'])[:12] if known else None

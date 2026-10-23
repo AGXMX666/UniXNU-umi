@@ -14,6 +14,10 @@ def main():
  parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--attempt',type=int,default=56);args=parser.parse_args()
  OUT=ROOT/f'out/umi/attempt-{args.attempt:02d}-preparation'
  OUT.mkdir(parents=True,exist_ok=True);commands=[
+ ['xcrun','clang++','-std=c++17','-Wall','-Wextra','-Werror','-fsanitize=address,undefined',str(ROOT/'tests/umi_board_boost.cpp'),'-o',str(OUT/'board-boost-test')],
+ [str(OUT/'board-boost-test')],
+ ['xcrun','clang++','-std=c++17','-Wall','-Wextra','-Werror','-fsanitize=address,undefined',str(ROOT/'tests/umi_board_spmi.cpp'),'-o',str(OUT/'board-spmi-test')],
+ [str(OUT/'board-spmi-test')],
  ['xcrun','clang++','-std=c++17','-Wall','-Wextra','-Werror','-fsanitize=address,undefined',str(ROOT/'tests/umi_fts_gpi.cpp'),'-o',str(OUT/'fts-gpi-test')],
  [str(OUT/'fts-gpi-test')],
  ['xcrun','clang++','-std=c++17','-Wall','-Wextra','-Werror','-Wno-unused-function','-fsanitize=address,undefined',str(ROOT/'tests/umi_fts_gpi_transport.cpp'),'-o',str(OUT/'fts-gpi-transport-test')],
@@ -57,6 +61,8 @@ def main():
   if p.returncode:raise SystemExit(p.stdout+p.stderr)
  inputs=['devices/umi/package/touch/UmiFtsCore.h','tests/umi_fts_core.cpp','tools/umi_touch_trace.py','tests/test_umi_touch_trace.py', 'tools/check_umi_touch.py','devices/umi/package/touch/UmiTouchLog.h','devices/umi/package/touch/UmiFtsTouch.cpp','tests/umi_touch_irq_log.cpp']
  inputs+=['devices/umi/package/touch/UmiFtsStartup.h','tests/umi_fts_startup.cpp']
+ inputs+=['devices/umi/package/touch/UmiBoardBoost.h','devices/umi/package/touch/UmiSpmi.inc','tests/umi_board_boost.cpp']
+ inputs+=['tests/umi_board_spmi.cpp']
  inputs+=['devices/umi/package/touch/UmiFtsIdentity.h','tests/umi_fts_identity.cpp','devices/umi/package/touch/native-startup-reference.json']
  inputs+=['devices/umi/package/touch/UmiFtsRetry.h','devices/umi/package/touch/UmiFtsBus.inc','tests/umi_fts_retry.cpp']
  inputs+=['devices/umi/package/touch/UmiFtsRecovery.inc','tests/umi_fts_recovery.cpp']

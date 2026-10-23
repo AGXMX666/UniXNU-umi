@@ -1,5 +1,5 @@
 {
-  "attempt": 79,
+  "attempt": 80,
   "reference_commit": "71b13e62f057a649b77fe4062feb73ee72ad609c",
   "reference_files": {
     "drivers/input/touchscreen/fts_521/fts.c": "35d7c5969542cda75bd5099c59caafec2157916d7a1922df2e41d360c0342068",
@@ -11,23 +11,22 @@
     "drivers/pinctrl/qcom/pinctrl-kona.c": "87014b0ea67da00fb7c78f543c0030647a546797a15f3192657d0ca5840820ff",
     "drivers/pinctrl/qcom/pinctrl-spmi-gpio.c": "383e30261aa59340f950eeeadb2fb4ffd04005ef9ebda60b7be050843b2b9b32",
     "arch/arm64/boot/dts/vendor/qcom/pm8150b.dtsi": "2d37c06ce02f0470180dfe3803f94568108ffb896cf89246f37d5ead70307e41",
-    "arch/arm64/boot/dts/vendor/qcom/xiaomi-sm8250-common.dtsi": "8ba75d5b22e084ec0d5c71e581320c5a528b229e124df34570b96bf34900298c"
+    "arch/arm64/boot/dts/vendor/qcom/xiaomi-sm8250-common.dtsi": "8ba75d5b22e084ec0d5c71e581320c5a528b229e124df34570b96bf34900298c",
+    "drivers/spmi/spmi-pmic-arb.c": "bedee16415c7290c2c07414623edc8af16b185f475e3512bb963e7c67076754c"
   },
   "changes": [
-    "Retain attempt78 three GPIO reset/startup and default touch charger0 baseline.",
-    "Between READY1 and GPIO reset2, load read-only factory record0x70 using A4 06 70; require matching echo, fresh counter, valid header and exact native umi module identity. No flash/calibration writes.",
-    "Bound read-only identity acquisition to one command and at most50 FIFO reads/100ms polling after native10ms delay. Error or unexpected reset stops explicitly.",
-    "Observe PM8150B GPIO5 SID2/c400 before startup and5s, following native always-on vdd_boost_vreg. Read-only mode/enable/source state, not an analog voltage measurement or proven FTS supply connection.",
-    "Retain mode comparison through30s and FIFO/raw/scan/HID logs. Remove redundant90s C1 mode capture to preserve trace capacity."
+    "Retain three GPIO resets, factory identity load and default touch mode.",
+    "Reconcile native always-on PM8150B GPIO5: require exact observed PMIC/GPIO profile, EE0 write ownership, enable only C444 bit7; wait4000us and re-read full profile. Already-high path does not write.",
+    "Map only the selected APID write page; no ownership changes, voltage/mux changes, retries or power-off. Retain rail on touch failure as native always-on.",
+    "Log enable result, write attempts, before/after latch, APID/owner/channel and readback; keep5s rail capture and raw/FIFO/HID evidence. Replace redundant30s C1 capture, unchanged trace capacity."
   ],
   "limitations": [
-    "Identity read is a confirmed missing native probe operation, not yet proven cause of touch failure.",
-    "The native board boost node is always-on, but its electrical connection to FTS is unproven. No GPIO5 or boost writes.",
-    "Recovery replay uses software reset to avoid stealing GPIO from native driver; XNU uses its owned GPIO resets.",
-    "No QEMU or NVM writes."
+    "PM8150B GPIO5 output-low in79 is a proven board configuration difference; its physical connection to FTS AVDD and touch causality remain unproven.",
+    "No analog voltage measurement. Enabling the board rail does not by itself prove working touch.",
+    "No QEMU, NVM writes, voltage programming or Data/Recovery formatting."
   ],
-  "previous_result_sha256": "85dbbd37cc95fab51b0c98449f52ddea33244efbb1f03f9a2dfb85f37dc56858",
-  "created_utc": "2026-10-23T06:22:44.334146+00:00",
+  "previous_result_sha256": "a9815ca2d2dc49acf21afe093ff212dea5bd891491ff4a7e3020824e34b51d7e",
+  "created_utc": "2026-10-23T06:40:35.044731+00:00",
   "hardware_test_pending": true,
   "qemu_test_performed": false,
   "recovery_modes": {

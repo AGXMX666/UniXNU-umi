@@ -8,6 +8,15 @@ def row(tag,n,f,v):
  crc=zlib.crc32(struct.pack('<BBQ',n,f,v))
  return f'\nUMI {tag} {n:02x} {f:02x} {v:016x} {crc:08x}\n'.encode()
 class TouchTraceTests(unittest.TestCase):
+ def test_board_boost_needs_complete_guarded_write_readback(self):
+  v=[27,1,0,0,0,0,1,0,0x80,7,8000,3,0,0x0c630000,4000,0]
+  def read(v):return decode_touch(b''.join(row('TCHX',1,i,x) for i,x in enumerate(v)))['board_boost_enable'][0]
+  self.assertTrue(read(v)['enable_readback_verified']);self.assertFalse(read(v)['touch_fix_verified'])
+  for field,value in ((3,1),(4,1),(5,1),(6,2),(7,0x80),(8,0),(9,3),(11,512),(12,1),(13,0),(14,3999),(15,1)):
+   a=v.copy();a[field]=value;self.assertFalse(read(a)['enable_readback_verified'])
+  a=v.copy();a[6]=0;a[7]=0x80;a[9]=15;a[11]=512;a[12]=7;a[13]=0;self.assertTrue(read(a)['enable_readback_verified'])
+  for missing in range(1,16):
+   r=decode_touch(b''.join(row('TCHX',1,i,x) for i,x in enumerate(v) if i!=missing))['board_boost_enable'][0];self.assertIsNone(r['enable_readback_verified'])
  def test_factory_identity_requires_echo_counter_and_profile(self):
   word=lambda s:int.from_bytes(bytes.fromhex(s),'little')
   v=[25,1,0,0,63,word('a5 01 01 00 00 00 00 00'),word('a5 70 02 00 00 02 00 00'),word('53 42 32 01 74 02 32 01'),word('43 01 a4 06 70 00 00 00'),0,0,1,12000,0x70,1,0]
