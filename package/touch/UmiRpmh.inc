@@ -394,6 +394,12 @@ UmiRpmhTouchOutstanding (VOID)
   return mSlotOwned || mInFlight || mVoteOutstanding;
 }
 
+BOOLEAN
+UmiRpmhTouchVoteSettled (VOID)
+{
+  return mVoteOutstanding && !mInFlight && !mSlotOwned && !mInCall;
+}
+
 EFI_STATUS
 UmiRpmhTouchEnable (VOID)
 {

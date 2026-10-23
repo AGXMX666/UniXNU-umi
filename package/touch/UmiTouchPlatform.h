@@ -35,7 +35,13 @@ static void MmioWrite32(uintptr_t,uint32_t);
 static uint64_t frequency;
 static inline uint64_t GetPerformanceCounter(void) {uint64_t n;__asm__ volatile("isb\n\tmrs %0,cntpct_el0":"=r"(n));return n;}
 static inline uint64_t GetTimeInNanoSecond(uint64_t delta) {return delta/frequency*1000000000ULL+(delta%frequency)*1000000000ULL/frequency;}
-static inline void MicroSecondDelay(unsigned us) {IODelay(us);}
+static inline void MicroSecondDelay(unsigned us) {
+    // GPIO clock edges must not deliberately block the worker in IODelay.
+    // Keep power/reset waits sleepable; leave IRQs and preemption enabled.
+    if(us>50 || !frequency){IODelay(us);return;}
+    uint64_t start=GetPerformanceCounter(),ticks=(frequency*us+999999)/1000000;
+    while(GetPerformanceCounter()-start<ticks){}
+}
 static inline void MemoryFence(void) {__asm__ volatile("dsb sy":::"memory");}
 static inline bool SaveAndDisableInterrupts(void) {return ml_set_interrupts_enabled(false);}
 static inline void SetInterruptState(bool state) {ml_set_interrupts_enabled(state);}

@@ -1,7 +1,38 @@
 #include <cassert>
 #include <cstdio>
+#include <initializer_list>
 #include "../devices/umi/package/touch/UmiFtsStartup.h"
 int main() {
+    // Native NO_INIT is allowed only for complete identity/CRC/AFE evidence.
+    UmiFtsControllerRead r={};r.bytesRead=208;r.chunkMask=0x1fff;r.crc=0xc0;
+    r.bytes[0]=0xa5;r.bytes[1]=1;r.bytes[10]=0x39;r.bytes[11]=0x36;
+    r.bytes[16]=0x28;r.bytes[17]=1;r.bytes[18]=0x53;r.bytes[19]=0x40;
+    r.bytes[20]=0x4b;r.bytes[28]=r.bytes[29]=r.bytes[30]=5;
+    auto identity=umi_fts_sysinfo(r.bytes,r.bytesRead);
+    assert(!umi_fts_native_identity_check(r,identity));
+    for(unsigned missing=0;missing<13;++missing){auto failed=r;failed.chunkMask&=~(1U<<missing);
+        assert(umi_fts_native_identity_check(failed,identity)==1);}
+    for(unsigned n=0;n<208;++n){auto failed=r;failed.bytesRead=n;
+        assert(umi_fts_native_identity_check(failed,identity)==1);}
+    {auto failed=r;failed.sysResult=7;assert(umi_fts_native_identity_check(failed,identity)==1);}
+    {auto failed=identity;failed.valid=false;assert(umi_fts_native_identity_check(r,failed)==2);}
+    {auto failed=r;failed.crcResult=7;assert(umi_fts_native_identity_check(failed,identity)==3);}
+    for(unsigned bits=1;bits<=3;++bits){auto failed=r;failed.crc|=bits;
+        assert(umi_fts_native_identity_check(failed,identity)==4);}
+    for(unsigned n=0;n<4;++n){auto failed=identity;
+        uint16_t *fields[]={&failed.chip0,&failed.fw,&failed.svn,&failed.config};++*fields[n];
+        assert(umi_fts_native_identity_check(r,failed)==5);}
+    for(unsigned n=0;n<3;++n){auto failed=identity;
+        uint8_t *fields[]={&failed.cfgAfe,&failed.cxAfe,&failed.panelAfe};++*fields[n];
+        assert(umi_fts_native_identity_check(r,failed)==6);}
+    for(unsigned error: {0U,1U,2U,12U}){
+        unsigned calls=0,waits=0;
+        auto result=umi_fts_software_reset([&](const uint8_t *w,unsigned n){
+            ++calls;const uint8_t expected[]={0xfa,0x20,0,0,0x24,0x80};
+            assert(n==sizeof(expected) && !memcmp(w,expected,n));return error;
+        },[&](){++waits;});
+        assert(result==error && calls==1 && waits==unsigned(error==0));
+    }
     UmiTouchFrame f{};uint8_t e[8];
     f.points[1]={100,200,1};UmiTouchFrame saved=f;
     memset(e,0xff,sizeof(e));

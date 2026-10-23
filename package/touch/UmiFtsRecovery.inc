@@ -6,7 +6,7 @@ STATIC UINT64 mRecoveryElapsedNs;
 STATIC BOOLEAN
 RecoveryEligible (UINT32 Result)
 {
-  return Result == EFI_TIMEOUT && mLastFifoRead && mLastPhase == 7 &&
+  return !mNative && Result == EFI_TIMEOUT && mLastFifoRead && mLastPhase == 7 &&
          mAckMask == 7 && mLastStopResult == EFI_SUCCESS && mLastLines == 2 &&
          mOwned && mLastPinsValid && PowerReady () &&
          MmioRead32 (GPIO_CTL (SDA)) == mGpioCtl[0] &&

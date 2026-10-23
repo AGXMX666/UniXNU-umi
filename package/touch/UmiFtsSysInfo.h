@@ -6,6 +6,7 @@ enum {UMI_FTS_SYSINFO_SIZE=208,UMI_FTS_SYSINFO_CHUNK=16};
 struct UmiFtsSysInfo {
     bool valid;
     uint16_t chip0,chip1,fw,svn,config,cx,resX,resY,msRaw,ssTxRaw,ssRxRaw;
+    uint16_t filtered[3],baseline[3];
     uint8_t cfgAfe,cxAfe,panelAfe,protocol,tx,rx;
 };
 static uint16_t umi_fts_le16(const uint8_t *p){return (uint16_t)(p[0]|(unsigned)p[1]<<8);}
@@ -19,6 +20,7 @@ static UmiFtsSysInfo umi_fts_sysinfo(const uint8_t *p,unsigned bytes) {
     s.cfgAfe=p[28];s.cxAfe=p[29];s.panelAfe=p[30];s.protocol=p[31];
     s.resX=umi_fts_le16(p+80);s.resY=umi_fts_le16(p+82);s.tx=p[84];s.rx=p[85];
     s.msRaw=umi_fts_le16(p+136);s.ssTxRaw=umi_fts_le16(p+144);s.ssRxRaw=umi_fts_le16(p+152);
+    for(unsigned i=0;i<3;++i){s.filtered[i]=umi_fts_le16(p+138+8*i);s.baseline[i]=umi_fts_le16(p+142+8*i);}
     return s;
 }
 struct UmiFtsControllerRead {

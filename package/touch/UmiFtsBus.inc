@@ -1,4 +1,6 @@
 // XNU adapter extraction; source hashes in transport-sources.json.
+#include "UmiFtsPowerSequence.h"
+#include "UmiFtsPinConfig.h"
 #define SE13_BASE          0x00A94000U
 #define TLMM_SOUTH         0x0F500000U
 #define GPIO_CTL(N)        (TLMM_SOUTH + (N) * 0x1000U)
@@ -20,6 +22,7 @@
 #define MAX_RECORDS        4U
 
 STATIC BOOLEAN   mOwned;
+STATIC BOOLEAN   mNative;
 STATIC UINT32    mSavedCtl[2];
 STATIC UINT32    mSavedOut[2];
 STATIC UINT32    mGpioCtl[2];
@@ -41,6 +44,27 @@ STATIC UINT8 mSupplyEnable;
 STATIC UINT32 mPowerCtl[2];
 STATIC UINT32 mPowerOut[2];
 STATIC UINT64 mReadyStart;
+STATIC BOOLEAN mCycleRequested;
+STATIC BOOLEAN mCycleEnabled;
+STATIC UmiFtsAvddCycle mAvddCycle;
+STATIC UINT64 mCycleElapsedNs;
+STATIC BOOLEAN mFullCycleEnabled,mFullCycleRequested;
+STATIC UmiFtsFullCycle mFullCycle;
+STATIC UINT64 mFullCycleElapsedNs;
+
+STATIC UmiFtsSupplyState
+ReadSupplyState (VOID)
+{
+  UmiFtsSupplyState r={};UINT8 value[4]={};
+  STATIC CONST UINT16 addresses[]={0x4046,0x4008,0x4042,0x4043};
+  for (unsigned n=0;n<4;++n) {
+    r.result=UmiSpmiRead8(mSupplySid,addresses[n],value+n);
+    if (r.result) break;
+    r.valid|=1U<<n;
+  }
+  r.enable=value[0];r.status=value[1];r.mv=value[2]|(unsigned(value[3])<<8);
+  return r;
+}
 
 STATIC VOID
 Snapshot (VOID)
@@ -109,11 +133,7 @@ RestorePower (VOID)
 STATIC VOID
 DrivePowerPin (UINT32 Pin, BOOLEAN HighValue)
 {
-  UINT32 Ctl = MmioRead32 (GPIO_CTL (Pin));
-  Ctl &= ~(GPIO_FUNC_MASK | GPIO_PULL_MASK | GPIO_DRIVE_MASK | GPIO_OE);
-  if ((Ctl & BIT11) != 0) {
-    Ctl |= BIT12;
-  }
+  UINT32 Ctl = umi_fts_power_pin_config(MmioRead32(GPIO_CTL(Pin)),Pin);
   MmioWrite32 (GPIO_CTL (Pin), Ctl);
   MmioWrite32 (GPIO_IO (Pin),
                (MmioRead32 (GPIO_IO (Pin)) & ~GPIO_OUT) | (HighValue ? GPIO_OUT : 0));
@@ -221,10 +241,34 @@ InitializePower (VOID)
     mPowerOut[Index] = MmioRead32 (GPIO_IO (Pin)) & GPIO_OUT;
   }
   mPowerOwned = TRUE;
-  DrivePowerPin (38, FALSE);
-  DrivePowerPin (69, TRUE);
-  MicroSecondDelay (10000); // fts_system_reset: RESET low for 10 ms.
-  DrivePowerPin (38, TRUE);
+  if (mFullCycleEnabled) {
+    mFullCycleRequested=TRUE;UINT64 started=GetPerformanceCounter();
+    mFullCycle=umi_fts_full_cycle(mSupplyEnable==0 && UmiRpmhTouchVoteSettled(),
+      [](unsigned pin,bool high){DrivePowerPin(pin,high);},
+      [](){return unsigned(High(38)) | unsigned(High(69))<<1;},
+      [](bool on){return on?UmiRpmhTouchEnable():UmiRpmhTouchDisable();},
+      [](){return ReadSupplyState();},
+      [](unsigned ms){MicroSecondDelay(ms*1000);});
+    mFullCycleElapsedNs=GetTimeInNanoSecond(GetPerformanceCounter()-started);
+    if(mFullCycle.result)return EFI_DEVICE_ERROR;
+  } else if (mCycleEnabled) {
+    mCycleRequested = TRUE;
+    UINT64 started = GetPerformanceCounter ();
+    mAvddCycle = umi_fts_avdd_cycle(
+      [](unsigned pin, bool high){DrivePowerPin(pin, high);},
+      [](){return unsigned(High(38)) | unsigned(High(69)) << 1;},
+      [](unsigned ms){MicroSecondDelay(ms * 1000);});
+    mCycleElapsedNs = GetTimeInNanoSecond(GetPerformanceCounter() - started);
+    if (mAvddCycle.result) return EFI_DEVICE_ERROR;
+  } else {
+    // Normal native probe: AVDD enabled, RESET requested output-high, then
+    // fts_init performs the first 10 ms GPIO reset. No supply OFF request.
+    DrivePowerPin (69, TRUE);
+    DrivePowerPin (38, TRUE);
+    DrivePowerPin (38, FALSE);
+    MicroSecondDelay (10000); // fts_system_reset: RESET low for 10 ms.
+    DrivePowerPin (38, TRUE);
+  }
   mAwaitReady = TRUE;
   mReadyStart = GetPerformanceCounter ();
   DEBUG ((DEBUG_WARN, "UMI touch power: L1 SID%u ready at 1800mV; AVDD high; reset released\n", mSupplySid));
@@ -289,13 +333,6 @@ AcquirePins (VOID)
     DEBUG ((DEBUG_WARN, "UMI touch preflight: GENI active\n"));
     return EFI_ACCESS_DENIED;
   }
-  { // Always reset to obtain a fresh READY event, including inherited rails.
-    DEBUG ((DEBUG_WARN, "UMI touch preflight: initializing touch power/reset\n"));
-    EFI_STATUS Status = InitializePower ();
-    if (EFI_ERROR (Status)) {
-      return Status;
-    }
-  }
   for (Index = 0; Index < 2; Index++) {
     Pin = SDA + (UINT32)Index;
     mSavedCtl[Index] = MmioRead32 (GPIO_CTL (Pin));
@@ -304,6 +341,7 @@ AcquirePins (VOID)
     if ((Ctl & BIT11) != 0) {
       Ctl |= BIT12; /* Linux pinctrl-msm: enable eGPIO if present. */
     }
+    if (mNative) Ctl |= 1U << 2; // Kona GPIO36/37 function1 = qup13, 2mA, no pull.
     mGpioCtl[Index] = Ctl;
   }
   mOwned = TRUE;
@@ -318,15 +356,22 @@ AcquirePins (VOID)
     }
   }
   MemoryFence ();
+  EFI_STATUS IrqStatus = ConfigureIrq ();
+  if (EFI_ERROR (IrqStatus)) { ReleasePins (); return IrqStatus; }
+  { // Always reset to obtain a fresh READY event, including inherited rails.
+    DEBUG ((DEBUG_WARN, "UMI touch preflight: initializing touch power/reset\n"));
+    EFI_STATUS Status = InitializePower ();
+    if (EFI_ERROR (Status)) {
+      return Status;
+    }
+  }
   MicroSecondDelay (HALF_CYCLE_US);
   if (!High (SDA) || !High (SCL)) {
     DEBUG ((DEBUG_WARN, "UMI touch preflight: released SDA=%u SCL=%u\n", High (SDA), High (SCL)));
     ReleasePins ();
     return EFI_NOT_READY; /* No recovery clocks, pull-up changes or power cycle. */
   }
-  EFI_STATUS IrqStatus = ConfigureIrq ();
-  if (EFI_ERROR (IrqStatus)) ReleasePins ();
-  return IrqStatus;
+  return EFI_SUCCESS;
 }
 
 STATIC VOID
@@ -492,6 +537,21 @@ ReadByte (UINT8 *Value, BOOLEAN Last)
 STATIC EFI_STATUS
 Transfer (CONST UINT8 *Write, UINTN WriteSize, UINT8 *Read, UINTN ReadSize)
 {
+#ifdef UMI_FTS_NATIVE_GPI
+  if (mNative) {
+    mLastFifoRead = Write && WriteSize == 1 && Write[0] == 0x86 && ReadSize == 8;
+    mAckMask = 0; mLastMaxGapNs = 0; mLastStopResult = EFI_NOT_READY;
+    uint64_t start = GetPerformanceCounter ();
+    unsigned status = ControlReady () ? gpi::transfer(Write,WriteSize,Read,ReadSize) : EFI_ACCESS_DENIED;
+    mLastElapsedNs = GetTimeInNanoSecond (GetPerformanceCounter () - start);
+    mLastPhase = gpi::phase; mLastByte = 0; mLastGeni = MmioRead32(SE13_BASE+0x40);
+    mLastLines = unsigned(High(SDA)) | (unsigned(High(SCL)) << 1);
+    mLastPinsValid = PowerReady() && MmioRead32(GPIO_CTL(SDA))==mGpioCtl[0] && MmioRead32(GPIO_CTL(SCL))==mGpioCtl[1];
+    // Native completed transactions imply address/data ACK, no bitbang byte mask.
+    if(!status){mLastStopResult=EFI_SUCCESS;}
+    return status;
+  }
+#endif
   EFI_STATUS Status;
   EFI_STATUS StopStatus;
   UINTN Index;

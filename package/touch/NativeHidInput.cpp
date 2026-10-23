@@ -32,7 +32,7 @@ static const unsigned char descriptor[]={
     0x75,0x01,0x95,0x01,0x81,0x02,
     0x75,0x07,0x95,0x01,0x81,0x03,0xc0
 };
-// Report 3: ten-finger Touch Screen collection (Tip Switch, Untouch (set when the tip is up), Contact Identifier, X, Y per finger, then Contact Count).
+// Report 3: ten-finger Touch Screen collection (Tip Switch, TouchValid/confidence, Contact Identifier, X, Y per finger, then Contact Count).
 // Coordinates are normalised to 0..32767 on both axes by the producer.
 #define FINGER_DESC \
     0x09,0x22,0xa1,0x02, 0x09,0x42,0x15,0x00,0x25,0x01,0x75,0x01,0x95,0x01,0x81,0x02, 0x09,0x47,0x81,0x02, 0x75,0x06,0x95,0x01,0x81,0x03, \
@@ -226,7 +226,7 @@ public:
         if(!setProperty("HIDDefaultBehavior",true))return false;
         unsigned touch=0;
         touchEnabled=PE_parse_boot_argn("sheng-touch-hid",&touch,sizeof(touch)) && touch==1;
-        if(touchOnly||touchEnabled){setProperty("Built-In",true);setProperty("DisplayIntegrated",true);}
+        if(touchOnly||touchEnabled){setProperty("Built-In",true);setProperty("DisplayIntegrated",true);setProperty("DigitizerCollectionDispatch",true);}
         if(!IOHIDDevice::start(provider))return false;
         timer=IOTimerEventSource::timerEventSource(this,tick);
         if(!timer || inputLoop->addEventSource(timer)!=kIOReturnSuccess) {

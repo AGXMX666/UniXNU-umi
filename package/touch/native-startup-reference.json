@@ -1,0 +1,43 @@
+{
+  "attempt": 79,
+  "reference_commit": "71b13e62f057a649b77fe4062feb73ee72ad609c",
+  "reference_files": {
+    "drivers/input/touchscreen/fts_521/fts.c": "35d7c5969542cda75bd5099c59caafec2157916d7a1922df2e41d360c0342068",
+    "drivers/input/touchscreen/fts_521/fts_lib/ftsCore.c": "ac9d88fce719b46e4c869b8ed9c67eafd54579274a0688e96de71b3d04a7167c",
+    "drivers/input/touchscreen/fts_521/fts_lib/ftsError.c": "6d5af2024038dbc6d8ad6b0c921c1b8b13b9fea6de06d0ff62d9bda02afe6762",
+    "arch/arm64/boot/dts/vendor/qcom/umi-sm8250.dtsi": "5d7693de26606e5d9fa9cb6b73d1278fd79e008a5e08134a3c0d83d90fc90a01",
+    "arch/arm64/boot/dts/vendor/qcom/dsi-panel-j2-mp-42-02-0b-dsc-cmd.dtsi": "8acd59b8a3e9b5de527be34fb8570fba621b18c07f24a5ffedc0ce2f6143b92c",
+    "techpack/display/msm/dsi/dsi_panel_mi.c": "63a6db4479057573673d85de7a822f3ecbd723aff47e1d60d9cd274e8f78c27b",
+    "drivers/pinctrl/qcom/pinctrl-kona.c": "87014b0ea67da00fb7c78f543c0030647a546797a15f3192657d0ca5840820ff",
+    "drivers/pinctrl/qcom/pinctrl-spmi-gpio.c": "383e30261aa59340f950eeeadb2fb4ffd04005ef9ebda60b7be050843b2b9b32",
+    "arch/arm64/boot/dts/vendor/qcom/pm8150b.dtsi": "2d37c06ce02f0470180dfe3803f94568108ffb896cf89246f37d5ead70307e41",
+    "arch/arm64/boot/dts/vendor/qcom/xiaomi-sm8250-common.dtsi": "8ba75d5b22e084ec0d5c71e581320c5a528b229e124df34570b96bf34900298c"
+  },
+  "changes": [
+    "Retain attempt78 three GPIO reset/startup and default touch charger0 baseline.",
+    "Between READY1 and GPIO reset2, load read-only factory record0x70 using A4 06 70; require matching echo, fresh counter, valid header and exact native umi module identity. No flash/calibration writes.",
+    "Bound read-only identity acquisition to one command and at most50 FIFO reads/100ms polling after native10ms delay. Error or unexpected reset stops explicitly.",
+    "Observe PM8150B GPIO5 SID2/c400 before startup and5s, following native always-on vdd_boost_vreg. Read-only mode/enable/source state, not an analog voltage measurement or proven FTS supply connection.",
+    "Retain mode comparison through30s and FIFO/raw/scan/HID logs. Remove redundant90s C1 mode capture to preserve trace capacity."
+  ],
+  "limitations": [
+    "Identity read is a confirmed missing native probe operation, not yet proven cause of touch failure.",
+    "The native board boost node is always-on, but its electrical connection to FTS is unproven. No GPIO5 or boost writes.",
+    "Recovery replay uses software reset to avoid stealing GPIO from native driver; XNU uses its owned GPIO resets.",
+    "No QEMU or NVM writes."
+  ],
+  "previous_result_sha256": "85dbbd37cc95fab51b0c98449f52ddea33244efbb1f03f9a2dfb85f37dc56858",
+  "created_utc": "2026-10-23T06:22:44.334146+00:00",
+  "hardware_test_pending": true,
+  "qemu_test_performed": false,
+  "recovery_modes": {
+    "mode": "00 00 64 0f 02 0e 01",
+    "grip": "00 ff 00 00 00 00 00",
+    "evidence_sha256": "8974c4d378e42e6fff0b22c4dd2967143a8fd56c428df0fcbd825741567c2206"
+  },
+  "native_identity": {
+    "record_id": 112,
+    "identity": "53 42 32 01 74 02 32 01",
+    "replay_sha256": "22566a7409c1bd78b0ddcb7c9cef7159c9c15905201751549fd5cc47f2fee01b"
+  }
+}

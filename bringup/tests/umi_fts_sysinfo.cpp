@@ -8,7 +8,9 @@ int main(){
  set(10,0x3936);set(14,0x1234);set(16,0x128);set(18,0x4053);set(20,0x4b);set(24,0xffff);
  data[28]=5;data[29]=6;data[30]=7;data[31]=9;data[32]=0xaa;data[33]=0xbb;data[34]=0xcc;
  set(80,1080);set(82,2340);data[84]=32;data[85]=18;set(136,0x1000);set(144,0x2000);set(152,0x3000);
+ for(unsigned i=0;i<3;++i){set(138+8*i,0x4100+i*0x100);set(142+8*i,0x5100+i*0x100);}
  auto s=umi_fts_sysinfo(data,208);assert(s.valid&&s.fw==0x128&&s.svn==0x4053&&s.config==0x4b&&s.cx==0xffff);
+ for(unsigned i=0;i<3;++i){assert(s.filtered[i]==0x4100+i*0x100);assert(s.baseline[i]==0x5100+i*0x100);}
  assert(s.cfgAfe==5&&s.cxAfe==6&&s.panelAfe==7&&s.protocol==9);assert(s.resX==1080&&s.resY==2340&&s.tx==32&&s.rx==18);
  assert(s.msRaw==0x1000&&s.ssTxRaw==0x2000&&s.ssRxRaw==0x3000);
  for(unsigned n=0;n<208;++n)assert(!umi_fts_sysinfo(data,n).valid);

@@ -70,6 +70,7 @@ static int UmiSpmiRead8(uint8_t,uint16_t,uint8_t*){assert(false);return 4;}
 static int UmiRpmhTouchEnable(){assert(false);return 4;}
 static int UmiRpmhTouchDisable(){assert(false);return 4;}
 static bool UmiRpmhTouchOutstanding(){return false;}
+static bool UmiRpmhTouchVoteSettled(){return false;}
 #include "../devices/umi/package/touch/UmiFtsBus.inc"
 static void reset(unsigned release=4) {
  for(unsigned i=0;i<70;++i){ctl[i]=0;io[i]=0;}

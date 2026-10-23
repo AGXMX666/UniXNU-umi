@@ -23,7 +23,8 @@ def main():
  assert index==208,index
  expected={'u16_chip0Id':10,'u16_chip1Id':14,'u16_fwVer':16,'u16_svnRev':18,'u16_cfgVer':20,'u16_cxVer':24,
  'u8_cfgAfeVer':28,'u8_cxAfeVer':29,'u8_panelCfgAfeVer':30,'u8_protocol':31,'u16_scrResX':80,'u16_scrResY':82,
- 'u8_scrTxLen':84,'u8_scrRxLen':85,'u16_msTchRawAddr':136,'u16_ssTchTxRawAddr':144,'u16_ssTchRxRawAddr':152}
+ 'u8_scrTxLen':84,'u8_scrRxLen':85,'u16_msTchRawAddr':136,'u16_ssTchTxRawAddr':144,'u16_ssTchRxRawAddr':152,
+ 'u16_msTchFilterAddr':138,'u16_msTchBaselineAddr':142,'u16_ssTchTxFilterAddr':146,'u16_ssTchTxBaselineAddr':150,'u16_ssTchRxFilterAddr':154,'u16_ssTchRxBaselineAddr':158}
  for name,offset in expected.items():assert fields[name]==offset,(name,fields[name],offset)
  args.output.write_text(json.dumps({'passed':True,'source':str(SOURCE),'source_sha256':SHA,'source_header_sha256':hashlib.sha256(SOURCE.with_name('ftsCore.h').read_bytes()).hexdigest(),'parser_size':index,'fields':fields,'checked_port_offsets':expected},indent=2)+'\n')
  print('PASS: original C parser-derived offsets; AFE28/29/30, resolution80/82, frames136/144/152')

@@ -3,6 +3,30 @@
 #include <vector>
 #include "../devices/umi/package/touch/UmiFtsSensing.h"
 int main(){
+ // A transport failure may overwrite part of its destination; never expose it.
+ for(unsigned fail=0;fail<=2;++fail){
+  unsigned calls=0;
+  auto m=umi_fts_read_modes([&](const uint8_t *w,unsigned wn,uint8_t *r,unsigned rn){
+   assert(wn==2 && rn==7 && w[0]==0xc1 && w[1]==(calls?8:5));++calls;
+   for(unsigned i=0;i<rn;++i)r[i]=uint8_t(i+10*calls);
+   return calls==fail?77U:0U;
+  });
+  assert(calls==(fail==1?1U:2U));
+  assert(m.validMask==(fail==1?0U:fail==2?1U:3U));
+  assert(m.modeResult==(fail==1?77U:0U));
+  assert(m.gripResult==(fail==1?0x100U:fail==2?77U:0U));
+  for(unsigned i=0;i<7;++i){
+   assert(m.mode[i]==(fail==1?0U:i+10));
+   assert(m.grip[i]==(fail?0U:i+20));
+  }
+  assert(m.mode[7]==0 && m.grip[7]==0);
+ }
+ for(unsigned failure:{0U,19U}){
+  unsigned calls=0;
+  assert(umi_fts_default_charge_mode([&](const uint8_t *w,unsigned n){
+   ++calls;assert(n==3 && w[0]==0xa2 && w[1]==2 && w[2]==0);return failure;
+  })==failure);assert(calls==1);
+ }
  const std::vector<std::vector<uint8_t>> initial={{0xa0,0,1},{0xa2,3,0,0,0,3},{0xa0,0,0},{0xa0,0,1}};
  const unsigned errors[]={9,10,13,14};
  for(bool first:{false,true})for(unsigned fail=0;fail<=4;++fail){
@@ -18,5 +42,5 @@ int main(){
   else{assert(result==0);assert(completed==total);assert(attempts==total);}
   assert(sleeps==(first&&(!fail||fail==4)?1U:0U));
  }
- puts("PASS: original FOD scan init order, 50ms off interval, failed-write termination and reset-resume path");
+ puts("PASS: native sensing order, failures, seven-byte mode read isolation, bounded default charger command");
 }
