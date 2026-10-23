@@ -1,6 +1,6 @@
 # Reproducing the umi development workspace
 
-This is the source snapshot used for the Mi 10 bring-up through attempt 65. The
+This is the source snapshot used for the Mi 10 bring-up through attempt 80. The
 public `board.toml` and `umi_defconfig` still select the small source-only baseline.
 The Hello configuration is assembled by the explicit bring-up tools; running
 `unixnu build` with the default board file does not produce that configuration.
@@ -56,7 +56,7 @@ kernel is `10063.142.1.703.8`. They are distinct version pins.
 
 The tested phone profile adds prelinked crypto, PMGR service integration, GIC
 diagnostics, eight-core startup, native UFS, authenticated OS/SystemOS mounting,
-persistent Data, legacy display and the experimental ST FTS/HID path. The source
+persistent Data, legacy display and the ST FTS/HID path. The source
 entry points are `build_umi_xnu.py`, `build_umi_prelink.py`,
 `build_umi_data_display.py`, `prepare_umi_uefi.py` and `build_umi_uefi.py`.
 
@@ -88,6 +88,16 @@ scripts are also absent: their serial and partition assumptions are not a
 general installer. Re-measure another handset before any partition operation.
 
 ## Touch and log checks
+
+Attempt 80 uses `umi-fts-gpi=1` for native GPI DMA I²C. The startup path enables
+the board's native always-on PM8150B GPIO5 rail before the FTS supply/reset
+sequence, requiring the tested PMIC/pin profile and EE0 ownership and verifying
+the enable readback after 4 ms. Do not reuse these board constants on other devices.
+The native reference is the
+[LineageOS SM8250 kernel at 71b13e6](https://github.com/LineageOS/android_kernel_xiaomi_sm8250/tree/71b13e62f057a649b77fe4062feb73ee72ad609c);
+source hashes are recorded under `package/touch/*-reference.json`.
+Those reference files retain their build-time status for provenance; current
+hardware results are recorded separately in `docs/validation.json`.
 
 `tools/check_umi_touch.py --attempt <number>` runs the C++ protocol/fault tests,
 CRC decoder checks and RAM-console budget check. Its final layout audit requires

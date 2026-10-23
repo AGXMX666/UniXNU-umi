@@ -4,8 +4,9 @@ English | [简体中文](README.zh-CN.md)
 
 An independent UniXNU device port for **Xiaomi Mi 10 (`umi`, SM8250)**. The tested
 12 GiB / 256 GB handset reaches **iPadOS 17.7.11 Hello / Setup Assistant**.
-Physical touch does not work yet, so completing setup and reaching the home screen
-are not verified. This is a development source snapshot, not a ready-to-install release.
+Physical ST FTS touch under XNU was confirmed working by the device owner in
+attempt 80. Setup completion and the home screen remain unverified. This is a
+development source snapshot, not a ready-to-install release.
 
 | Repository | Role |
 | --- | --- |
@@ -15,7 +16,7 @@ are not verified. This is a development source snapshot, not a ready-to-install 
 
 ## Hardware status
 
-Status reflects the tested handset through attempt 65 (2026-10-23).
+Status reflects the tested handset through attempt 80 (2026-10-23).
 
 | Feature | State | Evidence / limitation |
 | --- | --- | --- |
@@ -25,16 +26,17 @@ Status reflects the tested handset through attempt 65 (2026-10-23).
 | UFS / OS / SystemOS | Working for startup | Root and cryptex mounted; launchd and system services run |
 | Writable Data | Working for startup | Persistent store across reboots on the test partition layout |
 | Display | Working | Apple logo and Hello/Setup via CPU copies to inherited scanout |
-| ST FTS touch | Not working | Controller identity, reset/READY and command responses read; no coordinate events or physical HID reports |
+| ST FTS touch | Working under XNU | Device owner confirmed usable physical touch in attempt 80; UEFI menu touch is not qualified |
 | GPU acceleration | Not implemented | CPU presentation only |
 | Wi-Fi, Bluetooth, cellular, audio, camera, sensors | Not implemented / not qualified | No complete driver validation |
 | USB under XNU, battery, suspend/resume | Not qualified | Recovery ADB is separate from XNU USB support |
 
 [Validation summary](docs/validation.json) contains selected non-identifying
 measurements and artifact hashes. Original device dumps and console logs remain
-local. The latest touch run has 61,963 polls over 141 seconds, zero transport
-errors, and zero coordinate/HID reports. This does not establish the cause of the
-missing touch input.
+local. Attempt 80 enables the native always-on PM8150B GPIO5 board rail before
+FTS startup, after the preceding run recorded the pin output-low. The owner
+confirmed working touch after this change. The runtime coordinate/HID counts
+for attempt 80 have not yet been collected; prior zero-event traces are historical.
 
 ## Sources and build
 
@@ -56,7 +58,7 @@ included in this repository.
 | --- | --- |
 | `board.toml`, `configs/`, `feeds.toml` | Board description and source baseline |
 | `scripts/`, `patches/` | ADT generation, kernel builds and platform/diagnostic patches |
-| `package/` | PMGR service, UFS/SMMU, persistent Data, display, diagnostics and experimental touch/HID |
+| `package/` | PMGR service, UFS/SMMU, persistent Data, display, diagnostics and ST FTS/HID |
 | `overlay/`, `menu/` | Firmware/menu staging sources used by the development builder |
 | `bringup/tools/`, `bringup/tests/` | Host build, decoding and fault-injection tools |
 | `docs/` | Build limitations and current hardware observation summary |
@@ -67,10 +69,12 @@ are deliberately not byte-identical. Firmware staging may update the UEFI tree.
 
 ## Current work
 
-The ST FTM5 path is still under bring-up. The initial public snapshot preserves
-the last tested implementation. The latest sheng short-delay and HID confidence /
-collection-dispatch fixes have been identified but are **not applied** here.
-Further work should distinguish bus/scan-state failures from HID delivery.
+The ST FTM5 path uses native GPI DMA I²C, the three-reset startup sequence,
+read-only factory identity acquisition and HID confidence/collection dispatch.
+The board-boost fix is in [138d6cb](https://github.com/reAAAq/UniXNU-umi/commit/138d6cb).
+[Native driver audit](docs/TOUCH_NATIVE_AUDIT.md) records the source comparison
+and test history. Multi-touch, suspend/resume and completing setup still need
+separate validation; working XNU touch does not qualify UEFI touch.
 
 The board geometry and high-memory window were measured on one handset. Do not
 reuse them on a different model or RAM/storage variant without revalidation.
