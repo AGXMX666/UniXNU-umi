@@ -76,6 +76,47 @@ def device_tree(evidence):
     return merged
 
 
+def validate_ramdisk_image(path):
+   """Validate an existing UniXNU FAT payload before embedding it as ramdisk."""
+   image = path.resolve(strict=True)
+   if not image.is_file():
+       raise ValueError(f"RAM payload is not a file: {image}")
+   size = image.stat().st_size
+   if size < (1 << 20) or size > (128 << 20) or size % 512:
+       raise ValueError("RAM payload must be 1 MiB..128 MiB and sector-aligned")
+   with image.open("rb") as stream:
+       boot = stream.read(512)
+   if len(boot) != 512 or boot[510:512] != b"\x55\xaa":
+       raise ValueError("RAM payload is not a FAT superfloppy boot sector")
+   if struct.unpack_from("<H", boot, 11)[0] != 512:
+       raise ValueError("RAM payload must use 512-byte FAT sectors")
+   sectors = struct.unpack_from("<H", boot, 19)[0]
+   if sectors == 0:
+       sectors = struct.unpack_from("<I", boot, 32)[0]
+   if sectors * 512 != size:
+       raise ValueError("RAM payload FAT sector count differs from its file size")
+
+   # Verify key paths using mtools instead of trusting only the file extension.
+   with tempfile.TemporaryDirectory(prefix="umi-ram-payload-check-") as tmp:
+       temp = Path(tmp)
+       for relative in (
+           "EFI/UniXNU/Payloads/kernel.macho",
+           "EFI/UniXNU/Payloads/kernel.macho.adt",
+           "EFI/UniXNU/unixnu.toml",
+       ):
+           destination = temp / Path(relative).name
+           subprocess.run(
+               ["mcopy", "-i", str(image), f"::/{relative}", str(destination)],
+               check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+           )
+           if not destination.is_file() or destination.stat().st_size == 0:
+               raise ValueError(f"RAM payload is missing or has an empty file: {relative}")
+       config = (temp / "unixnu.toml").read_text(errors="replace")
+       if 'type = "xnu"' not in config or 'path = "Payloads/kernel.macho"' not in config:
+           raise ValueError("RAM payload menu does not identify the XNU kernel entry")
+   return image
+    
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--firmware", type=Path, required=True)
@@ -85,6 +126,7 @@ def main():
     parser.add_argument("--input-profile", choices=("none", "buttons", "touch"), default="none")
     parser.add_argument("--payload-profile", choices=("none", "ram"), default="none")
     parser.add_argument("--ram-check", choices=("payload", "memory", "payload64", "xnu", "xnu-entry", "xnu-prelink"), default="payload")
+    parser.add_argument("--ramdisk-file", type=Path, help="use an existing FAT RAM payload image instead of generating a diagnostic payload")
     parser.add_argument("--loader-profile", choices=("none", "darwinboot"), default="none")
     parser.add_argument("-j", type=int, default=4)
     args = parser.parse_args()
@@ -142,7 +184,14 @@ def main():
             "prepare_sha256": sha(prepare_path.read_bytes()),
             "fd_sha256": sha(fd.read_bytes()),
         }, indent=2) + "\n")
-    ramdisk = make_payload(diagnostic=args.ram_check) if args.payload_profile == "ram" else None
+    if args.ramdisk_file:
+        if args.payload_profile != "ram":
+             parser.error("--ramdisk-file requires --payload-profile ram")
+        if args.ram_check != "payload":
+            parser.error("--ramdisk-file uses an already-built payload; leave --ram-check at its default")
+        ramdisk = validate_ramdisk_image(args.ramdisk_file)
+    else:
+        ramdisk = make_payload(diagnostic=args.ram_check) if args.payload_profile == "ram" else None
     subprocess.run([sys.executable, str(driver), "bootimg", *common, "--dtb", str(dtb),
                     "--ramdisk", str(ramdisk) if ramdisk else "none",
                     "-o", str(ROOT / "out/umi/boot/umi-uefi-menu.img")],
