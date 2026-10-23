@@ -57,8 +57,17 @@ while index < len(arguments):
         command.append(value)
     index += 1
 command.extend([
-    "-Wall", "-Wextra", "-Werror", "-Wno-unused-parameter", "-Wno-c99-designator",
-    "-Wno-reorder-init-list", "-Wno-deprecated-enum-enum-conversion",
+    "-Wall", "-Wextra", "-Werror",
+    "-Wno-unused-parameter",
+    "-Wno-c99-designator",
+    "-Wno-reorder-init-list",
+    "-Wno-deprecated-enum-enum-conversion",
+
+    # Fix: newer Clang diagnoses OSSymbol::isEqualTo()
+    # as an unnecessary virtual specifier in a final class.
+    # Keep -Werror enabled for all other warnings.
+    "-Wno-unnecessary-virtual-specifier",
+
     "-I", str(ROOT / ".cache/xnu-work/osfmk"),
 ])
 if args.gic_diagnostics:
