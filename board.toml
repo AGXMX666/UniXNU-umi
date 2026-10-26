@@ -92,6 +92,7 @@ volume = "UMIXNU"
 size_mib = 64
 loader = "firmware"
 title = "Mi 10 - XNU bring-up"
+skip_setup_tool = "scripts/seed-data-skip-setup.py"
 # Sum of the three observed FDT DRAM banks, including RAM above 4 GiB.
 dram_size = "0x2f9900000"
 panic_screen = false
