@@ -89,7 +89,7 @@ tags_offset = 0x1e00000
 # The generic XNU packer writes FAT32; reserve a 64 MiB image.
 [payload]
 volume = "UMIXNU"
-size_mib = 64
+size_mib = 192
 loader = "firmware"
 title = "Mi 10 - XNU bring-up"
 skip_setup_tool = "scripts/seed-data-skip-setup.py"
